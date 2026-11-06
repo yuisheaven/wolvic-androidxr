@@ -60,16 +60,25 @@ XrResult OpenXRInput::Initialize(ControllerDelegate &delegate, bool isEyeTrackin
     }
   }
 
-  if (isEyeTrackingSupported)
-    InitializeEyeGaze(delegate);
+  // Eye gaze is optional. Runtimes like Android XR gate it behind a permission
+  // (android.permission.EYE_TRACKING_FINE), so never let it abort the whole input setup.
+  bool eyeGazeEnabled = false;
+  if (isEyeTrackingSupported) {
+    eyeGazeEnabled = XR_SUCCEEDED(InitializeEyeGaze(delegate));
+    if (!eyeGazeEnabled)
+      VRB_WARN("OpenXR: eye gaze interaction could not be initialized, disabling it");
+  }
 
   XrSessionActionSetsAttachInfo attachInfo { XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO };
   attachInfo.countActionSets = 1;
   attachInfo.actionSets = &mActionSet->ActionSet();
   RETURN_IF_XR_FAILED(xrAttachSessionActionSets(mSession, &attachInfo));
 
-  if (isEyeTrackingSupported)
-    InitializeEyeGazeSpaces();
+  if (eyeGazeEnabled && XR_FAILED(InitializeEyeGazeSpaces())) {
+    VRB_WARN("OpenXR: eye gaze action space could not be created, disabling eye gaze");
+    eyeGazeEnabled = false;
+  }
+  mEyeGazeEnabled = eyeGazeEnabled;
 
   UpdateInteractionProfile(delegate);
 
@@ -319,19 +328,19 @@ OpenXRInput::~OpenXRInput() {
   }
 }
 
-void OpenXRInput::InitializeEyeGaze(ControllerDelegate& delegate) {
+XrResult OpenXRInput::InitializeEyeGaze(ControllerDelegate& delegate) {
     XrActionCreateInfo actionInfo{XR_TYPE_ACTION_CREATE_INFO};
     strcpy(actionInfo.actionName, "user_intent");
     actionInfo.actionType = XR_ACTION_TYPE_POSE_INPUT;
     strcpy(actionInfo.localizedActionName, "User Intent");
-    CHECK_XRCMD(xrCreateAction(mActionSet->ActionSet(), &actionInfo, &mUserIntentAction));
+    RETURN_IF_XR_FAILED(xrCreateAction(mActionSet->ActionSet(), &actionInfo, &mUserIntentAction));
 
     // Create suggested bindings
     XrPath eyeGazeInteractionProfilePath;
-    CHECK_XRCMD(xrStringToPath(mInstance, "/interaction_profiles/ext/eye_gaze_interaction",
-                               &eyeGazeInteractionProfilePath));
+    RETURN_IF_XR_FAILED(xrStringToPath(mInstance, "/interaction_profiles/ext/eye_gaze_interaction",
+                                       &eyeGazeInteractionProfilePath));
     XrPath gazePosePath;
-    CHECK_XRCMD(xrStringToPath(mInstance, "/user/eyes_ext/input/gaze_ext/pose", &gazePosePath));
+    RETURN_IF_XR_FAILED(xrStringToPath(mInstance, "/user/eyes_ext/input/gaze_ext/pose", &gazePosePath));
 
     XrActionSuggestedBinding bindings;
     bindings.action = mUserIntentAction;
@@ -341,30 +350,35 @@ void OpenXRInput::InitializeEyeGaze(ControllerDelegate& delegate) {
     suggestedBindings.interactionProfile = eyeGazeInteractionProfilePath;
     suggestedBindings.suggestedBindings = &bindings;
     suggestedBindings.countSuggestedBindings = 1;
-    CHECK_XRCMD(xrSuggestInteractionProfileBindings(mInstance, &suggestedBindings));
+    RETURN_IF_XR_FAILED(xrSuggestInteractionProfileBindings(mInstance, &suggestedBindings));
 
     mOneEuroFilterGazeOrientation = std::make_unique<OneEuroFilterQuaternion>(0.5, 0.25, 1.0);
+    return XR_SUCCESS;
 }
 
-void OpenXRInput::InitializeEyeGazeSpaces() {
+XrResult OpenXRInput::InitializeEyeGazeSpaces() {
     XrPosef pose_identity = XrPoseIdentity();
     XrActionSpaceCreateInfo createActionSpaceInfo{XR_TYPE_ACTION_SPACE_CREATE_INFO};
     createActionSpaceInfo.action = mUserIntentAction;
     createActionSpaceInfo.poseInActionSpace = pose_identity;
-    CHECK_XRCMD(xrCreateActionSpace(mSession, &createActionSpaceInfo, &mEyeGazeActionSpace));
+    RETURN_IF_XR_FAILED(xrCreateActionSpace(mSession, &createActionSpaceInfo, &mEyeGazeActionSpace));
+    return XR_SUCCESS;
 }
 
 bool OpenXRInput::updateEyeGaze(XrFrameState frameState, const vrb::Matrix& head, ControllerDelegate& delegate) {
+    if (!mEyeGazeEnabled)
+        return false;
+
     XrActionStatePose actionStatePose{XR_TYPE_ACTION_STATE_POSE};
     XrActionStateGetInfo getActionStateInfo{XR_TYPE_ACTION_STATE_GET_INFO};
     getActionStateInfo.action = mUserIntentAction;
-    CHECK_XRCMD(xrGetActionStatePose(mSession, &getActionStateInfo, &actionStatePose));
-    if (!actionStatePose.isActive)
+    if (XR_FAILED(xrGetActionStatePose(mSession, &getActionStateInfo, &actionStatePose)) || !actionStatePose.isActive)
         return false;
 
     XrEyeGazeSampleTimeEXT eyeGazeSampleTime{XR_TYPE_EYE_GAZE_SAMPLE_TIME_EXT};
     XrSpaceLocation gazeLocation{XR_TYPE_SPACE_LOCATION, &eyeGazeSampleTime};
-    CHECK_XRCMD(xrLocateSpace(mEyeGazeActionSpace, mLocalReferenceSpace, frameState.predictedDisplayTime, &gazeLocation));
+    if (XR_FAILED(xrLocateSpace(mEyeGazeActionSpace, mLocalReferenceSpace, frameState.predictedDisplayTime, &gazeLocation)))
+        return false;
 
     if (!(gazeLocation.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) ||
         !(gazeLocation.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {

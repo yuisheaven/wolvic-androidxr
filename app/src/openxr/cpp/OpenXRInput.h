@@ -54,6 +54,7 @@ private:
   KeyboardTrackingFBPtr keyboardTrackingFB { nullptr };
   XrAction mUserIntentAction { XR_NULL_HANDLE };
   XrSpace mEyeGazeActionSpace {XR_NULL_HANDLE };
+  bool mEyeGazeEnabled { false };
   XrSpace mLocalReferenceSpace { XR_NULL_HANDLE};
   std::unique_ptr<OneEuroFilterQuaternion> mOneEuroFilterGazeOrientation;
   vrb::Matrix mEyeTrackingTransform;
@@ -73,8 +74,8 @@ public:
   void SetKeyboardTrackingEnabled(bool enabled);
   bool PopulateTrackedKeyboardInfo(DeviceDelegate::TrackedKeyboardInfo& keyboardInfo);
   ~OpenXRInput();
-  void InitializeEyeGaze(ControllerDelegate&);
-  void InitializeEyeGazeSpaces();
+  XrResult InitializeEyeGaze(ControllerDelegate&);
+  XrResult InitializeEyeGazeSpaces();
   bool updateEyeGaze(XrFrameState, const vrb::Matrix& head, ControllerDelegate&);
   float GetSelectThreshold(int32_t aControllerIndex) const;
 };
