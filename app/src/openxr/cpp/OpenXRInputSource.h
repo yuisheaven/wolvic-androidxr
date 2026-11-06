@@ -45,6 +45,7 @@ private:
     XrResult applyHapticFeedback(XrAction, XrDuration, float = XR_FREQUENCY_UNSPECIFIED, float = 0.0) const;
     XrResult stopHapticFeedback(XrAction) const;
     void UpdateHaptics(ControllerDelegate&);
+    XrResult CreateHandTracker();
     bool GetHandTrackingInfo(XrTime predictedDisplayTime, XrSpace, const vrb::Matrix& head);
     float GetDistanceBetweenJoints (XrHandJointEXT jointA, XrHandJointEXT jointB);
     void EmulateControllerFromHand(device::RenderMode renderMode, XrTime predictedDisplayTime, const vrb::Matrix& head, const vrb::Matrix& handJointForAim, DeviceDelegate::PointerMode pointerMode, bool usingEyeTracking, const vrb::Matrix& eyeTrackingTransform, ControllerDelegate& delegate);
@@ -77,6 +78,7 @@ private:
     std::vector<float> axesContainer;
     crow::ElbowModelPtr elbow;
     XrHandTrackerEXT mHandTracker { XR_NULL_HANDLE };
+    XrTime mLastHandTrackerCreationAttempt { 0 };
     HandJointsArray mHandJoints;
     bool mHasHandJoints { false };
     bool mSupportsFBHandTrackingAim { false };

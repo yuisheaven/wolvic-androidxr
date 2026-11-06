@@ -130,12 +130,12 @@ XrResult OpenXRInputSource::Initialize()
     // Initialize hand tracking, if supported
     if (OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME) &&
             OpenXRExtensions::sXrCreateHandTrackerEXT != nullptr) {
-        XrHandTrackerCreateInfoEXT handTrackerInfo{XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT};
-        handTrackerInfo.hand = (mHandeness == OpenXRHandFlags::Right) ? XR_HAND_RIGHT_EXT : XR_HAND_LEFT_EXT;
-        handTrackerInfo.handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT;
-
-        RETURN_IF_XR_FAILED(OpenXRExtensions::sXrCreateHandTrackerEXT(mSession, &handTrackerInfo,
-                                                                      &mHandTracker));
+        // Some runtimes (e.g. Android XR) refuse to create hand trackers until the user grants a
+        // permission. Keep the input source in that case (controllers and hand interaction
+        // profiles may still work) and retry later from GetHandTrackingInfo().
+        XrResult result = CreateHandTracker();
+        if (XR_FAILED(result))
+            VRB_WARN("OpenXR: failed to create hand tracker (%s), will retry later", to_string(result));
 
         mSupportsHandJointsMotionRangeInfo = OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_JOINTS_MOTION_RANGE_EXTENSION_NAME);
         mSupportsFBHandTrackingAim = OpenXRExtensions::IsExtensionSupported(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME);
@@ -532,9 +532,38 @@ void OpenXRInputSource::ReleaseHandMeshBuffer() {
     mHandMeshMSFT.buffers.push_back(buffer);
 }
 
+XrResult OpenXRInputSource::CreateHandTracker() {
+    if (mHandTracker != XR_NULL_HANDLE)
+        return XR_SUCCESS;
+    if (!OpenXRExtensions::IsExtensionSupported(XR_EXT_HAND_TRACKING_EXTENSION_NAME) ||
+        OpenXRExtensions::sXrCreateHandTrackerEXT == nullptr)
+        return XR_ERROR_EXTENSION_NOT_PRESENT;
+
+    XrHandTrackerCreateInfoEXT handTrackerInfo{XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT};
+    handTrackerInfo.hand = (mHandeness == OpenXRHandFlags::Right) ? XR_HAND_RIGHT_EXT : XR_HAND_LEFT_EXT;
+    handTrackerInfo.handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT;
+
+    XrResult result = OpenXRExtensions::sXrCreateHandTrackerEXT(mSession, &handTrackerInfo, &mHandTracker);
+    if (XR_FAILED(result))
+        mHandTracker = XR_NULL_HANDLE;
+    return result;
+}
+
 bool OpenXRInputSource::GetHandTrackingInfo(XrTime predictedDisplayTime, XrSpace localSpace, const vrb::Matrix& head) {
-    if (OpenXRExtensions::sXrLocateHandJointsEXT == XR_NULL_HANDLE || mHandTracker == XR_NULL_HANDLE)
+    if (OpenXRExtensions::sXrLocateHandJointsEXT == XR_NULL_HANDLE)
         return false;
+
+    if (mHandTracker == XR_NULL_HANDLE) {
+        // Hand tracker creation failed during initialization, most likely because the hand
+        // tracking permission was not granted yet. Retry from time to time.
+        constexpr XrDuration kHandTrackerRetryInterval = 2'000'000'000; // 2 seconds
+        if (predictedDisplayTime - mLastHandTrackerCreationAttempt < kHandTrackerRetryInterval)
+            return false;
+        mLastHandTrackerCreationAttempt = predictedDisplayTime;
+        if (XR_FAILED(CreateHandTracker()))
+            return false;
+        VRB_LOG("OpenXR: hand tracker created");
+    }
 
     // Update hand locations
     XrHandJointsLocateInfoEXT locateInfo { XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT };
