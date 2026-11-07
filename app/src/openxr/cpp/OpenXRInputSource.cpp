@@ -21,6 +21,11 @@ const float kControllerClickThreshold = 0.25f;
 // why we need to be extra careful in order not to generate false positives.
 const float kPinchThreshold = 0.91f;
 
+// While a physical keyboard is in use, a tracked hand this far below the head whose aim ray points
+// down is most likely over the keyboard and not pointing at the UI.
+const float kKeyboardZoneMinDepthBelowHead = 0.35f; // meters
+const float kKeyboardZoneMinDownwardAim = 0.34f; // sin(20 degrees)
+
 OpenXRInputSourcePtr OpenXRInputSource::Create(XrInstance instance, XrSession session, OpenXRActionSet& actionSet, const XrSystemProperties& properties, OpenXRHandFlags handeness, int index)
 {
     OpenXRInputSourcePtr input(new OpenXRInputSource(instance, session, actionSet, properties, handeness, index));
@@ -197,6 +202,29 @@ XrResult OpenXRInputSource::CreateBinding(const char* profilePath, XrAction acti
     }
 
     return XR_SUCCESS;
+}
+
+bool OpenXRInputSource::IsHandOverKeyboard(const XrFrameState& frameState, XrSpace localSpace, const vrb::Matrix& head, device::RenderMode renderMode) const
+{
+    // Only for the browser UI, WebXR experiences get the hands as they are.
+    if (renderMode != device::RenderMode::StandAlone)
+        return false;
+
+    bool isActive = false;
+    XrSpaceLocation gripLocation { XR_TYPE_SPACE_LOCATION };
+    if (XR_FAILED(GetPoseState(mGripAction, mGripSpace, localSpace, frameState, isActive, gripLocation)) || !isActive ||
+        !(gripLocation.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT))
+        return false;
+    XrSpaceLocation aimLocation { XR_TYPE_SPACE_LOCATION };
+    if (XR_FAILED(GetPoseState(mPointerAction, mPointerSpace, localSpace, frameState, isActive, aimLocation)) || !isActive ||
+        !(aimLocation.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT))
+        return false;
+
+    // In StandAlone mode the head transform includes kAverageHeight, poses in local space don't.
+    const float headHeight = head.GetTranslation().y() - kAverageHeight.y();
+    const float depthBelowHead = headHeight - gripLocation.pose.position.y;
+    const vrb::Vector aimDirection = XrPoseToMatrix(aimLocation.pose).MultiplyDirection(vrb::Vector(0.0f, 0.0f, -1.0f)).Normalize();
+    return depthBelowHead > kKeyboardZoneMinDepthBelowHead && aimDirection.y() < -kKeyboardZoneMinDownwardAim;
 }
 
 XrResult OpenXRInputSource::GetPoseState(XrAction action, XrSpace space, XrSpace baseSpace, const XrFrameState& frameState, bool& isActive, XrSpaceLocation& location) const
@@ -853,6 +881,12 @@ void OpenXRInputSource::Update(const XrFrameState& frameState, XrSpace localSpac
             delegate.SetEnabled(mIndex, false);
             return;
         }
+    }
+
+    if (mPhysicalKeyboardInUse && (mUsingHandInteractionProfile || gotHandTrackingInfo) &&
+        IsHandOverKeyboard(frameState, localSpace, head, renderMode)) {
+        delegate.SetEnabled(mIndex, false);
+        return;
     }
 
     if (!mActiveMapping) {

@@ -1038,8 +1038,15 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     }
 
     // Hands resting on or moving over a physical keyboard are tracked too and trigger accidental
-    // clicks. Ignore them while the user types, and let Ctrl+Alt+H toggle hand tracking.
-    private static final long HAND_TRACKING_TYPING_PAUSE_MS = 1200;
+    // clicks. Ignore them while the user types, and let Ctrl+Alt+H toggle hand tracking. For a while
+    // after the last key press, the native side also ignores hands that are lowered over the keyboard.
+    private static final long HAND_TRACKING_TYPING_PAUSE_MS = 2500;
+    private static final long PHYSICAL_KEYBOARD_IN_USE_MS = 60_000;
+    private boolean mPhysicalKeyboardInUse = false;
+    private final Runnable mEndPhysicalKeyboardUse = () -> {
+        mPhysicalKeyboardInUse = false;
+        queueRunnable(() -> setPhysicalKeyboardInUseNative(false));
+    };
     private boolean mHandTrackingPausedForTyping = false;
     private final Runnable mResumeHandTrackingAfterTyping = () -> {
         mHandTrackingPausedForTyping = false;
@@ -1061,6 +1068,13 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
             }
             return true;
         }
+
+        if (!mPhysicalKeyboardInUse) {
+            mPhysicalKeyboardInUse = true;
+            queueRunnable(() -> setPhysicalKeyboardInUseNative(true));
+        }
+        mHandler.removeCallbacks(mEndPhysicalKeyboardUse);
+        mHandler.postDelayed(mEndPhysicalKeyboardUse, PHYSICAL_KEYBOARD_IN_USE_MS);
 
         if (mIsHandTrackingEnabled) {
             if (!mHandTrackingPausedForTyping) {
@@ -2340,5 +2354,6 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     private native void setIsServo(boolean aIsServo);
     private native void setPointerModeNative(@PointerMode int aMode);
     private native void setHandTrackingEnabledNative(boolean value);
+    private native void setPhysicalKeyboardInUseNative(boolean value);
 
 }

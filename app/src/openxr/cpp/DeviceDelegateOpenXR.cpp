@@ -127,6 +127,7 @@ struct DeviceDelegateOpenXR::State {
   XrEnvironmentBlendMode immersiveBlendMode { XR_ENVIRONMENT_BLEND_MODE_OPAQUE };
   bool isEyeTrackingSupported { false };
   bool handTrackingEnabled { true };
+  bool physicalKeyboardInUse { false };
   bool shouldUsePassthrough { false };
 
   bool IsPositionTrackingSupported() {
@@ -1251,6 +1252,7 @@ DeviceDelegateOpenXR::StartFrame(const FramePrediction aPrediction) {
 #if defined(HVR)
     offsets.y() = -m.firstPose->position.y;
 #endif
+    m.input->SetPhysicalKeyboardInUse(m.physicalKeyboardInUse);
     m.input->Update(frameState, m.localSpace, head, offsets, m.renderMode, m.pointerMode, m.handTrackingEnabled, *m.controller);
   }
 
@@ -1794,6 +1796,10 @@ void DeviceDelegateOpenXR::SetImmersiveBlendMode(device::BlendMode mode) {
 
 void DeviceDelegateOpenXR::SetHandTrackingEnabled(bool value) {
   m.handTrackingEnabled = value;
+}
+
+void DeviceDelegateOpenXR::SetPhysicalKeyboardInUse(bool value) {
+  m.physicalKeyboardInUse = value;
 }
 
 float DeviceDelegateOpenXR::GetSelectThreshold(int32_t aControllerIndex) {

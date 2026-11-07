@@ -31,6 +31,7 @@ private:
     XrResult CreateBinding(const char* profilePath, XrAction, const std::string& bindingPath, SuggestedBindings&) const;
 
     XrResult GetPoseState(XrAction, XrSpace, XrSpace, const XrFrameState&, bool& isActive, XrSpaceLocation&) const;
+    bool IsHandOverKeyboard(const XrFrameState&, XrSpace localSpace, const vrb::Matrix& head, device::RenderMode) const;
 
     struct OpenXRButtonState {
       bool clicked { false };
@@ -78,6 +79,7 @@ private:
     std::vector<float> axesContainer;
     crow::ElbowModelPtr elbow;
     XrHandTrackerEXT mHandTracker { XR_NULL_HANDLE };
+    bool mPhysicalKeyboardInUse { false };
     XrTime mLastHandTrackerCreationAttempt { 0 };
     HandJointsArray mHandJoints;
     bool mHasHandJoints { false };
@@ -119,6 +121,7 @@ public:
     XrResult SuggestBindings(SuggestedBindings&) const;
     void Update(const XrFrameState&, XrSpace, const vrb::Matrix& head, const vrb::Vector& offsets, device::RenderMode, DeviceDelegate::PointerMode pointerMode, bool usingEyeTracking, bool handTrackingEnabled, const vrb::Matrix& eyeTrackingTransform, ControllerDelegate& delegate);
     XrResult UpdateInteractionProfile(ControllerDelegate&);
+    void SetPhysicalKeyboardInUse(bool aInUse) { mPhysicalKeyboardInUse = aInUse; }
     std::string ControllerModelName() const;
     OpenXRInputMapping* GetActiveMapping() const { return mActiveMapping; }
     bool IsUsingHandInteractionProfile() { return mUsingHandInteractionProfile; }

@@ -1837,6 +1837,11 @@ BrowserWorld::SetHandTrackingEnabled(bool value) {
     m.device->SetHandTrackingEnabled(value);
 }
 
+void
+BrowserWorld::SetPhysicalKeyboardInUse(bool value) {
+    m.device->SetPhysicalKeyboardInUse(value);
+}
+
 JNIEnv*
 BrowserWorld::GetJNIEnv() const {
   ASSERT_ON_RENDER_THREAD(nullptr);
@@ -2351,6 +2356,11 @@ JNI_METHOD(void, setPointerModeNative)
 JNI_METHOD(void, setHandTrackingEnabledNative)
 (JNIEnv*, jobject, jboolean value) {
     crow::BrowserWorld::Instance().SetHandTrackingEnabled(value);
+}
+
+JNI_METHOD(void, setPhysicalKeyboardInUseNative)
+(JNIEnv*, jobject, jboolean value) {
+    crow::BrowserWorld::Instance().SetPhysicalKeyboardInUse(value);
 }
 
 } // extern "C"

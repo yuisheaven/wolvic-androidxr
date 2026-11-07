@@ -72,6 +72,7 @@ public:
   void SetHandMeshBufferSizes(const uint32_t indexCount, const uint32_t vertexCount);
   HandMeshBufferPtr GetNextHandMeshBuffer(const int32_t aControllerIndex);
   void SetKeyboardTrackingEnabled(bool enabled);
+  void SetPhysicalKeyboardInUse(bool aInUse);
   bool PopulateTrackedKeyboardInfo(DeviceDelegate::TrackedKeyboardInfo& keyboardInfo);
   ~OpenXRInput();
   XrResult InitializeEyeGaze(ControllerDelegate&);

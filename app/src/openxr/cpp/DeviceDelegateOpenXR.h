@@ -70,6 +70,7 @@ public:
   bool IsPassthroughEnabled() const override;
   bool PopulateTrackedKeyboardInfo(TrackedKeyboardInfo& keyboardInfo) override;
   void SetHandTrackingEnabled(bool value) override;
+  void SetPhysicalKeyboardInUse(bool value) override;
   void TogglePassthroughEnabled() override;
   // Custom methods for NativeActivity render loop based devices.
   void BeginXRSession();

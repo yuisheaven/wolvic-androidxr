@@ -164,6 +164,12 @@ bool OpenXRInput::HasPhysicalControllersAvailable() const {
     return false;
 }
 
+void OpenXRInput::SetPhysicalKeyboardInUse(bool aInUse) {
+  for (auto& input : mInputSources) {
+    input->SetPhysicalKeyboardInUse(aInUse);
+  }
+}
+
 void OpenXRInput::SetHandMeshBufferSizes(const uint32_t indexCount, const uint32_t vertexCount) {
   for (auto& input : mInputSources) {
     input->SetHandMeshBufferSizes(indexCount, vertexCount);
