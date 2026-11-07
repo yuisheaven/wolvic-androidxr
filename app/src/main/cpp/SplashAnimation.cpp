@@ -65,7 +65,7 @@ struct SplashAnimation::State {
     layer->Bind(GL_DRAW_FRAMEBUFFER);
     read->Bind(GL_READ_FRAMEBUFFER);
     VRB_GL_CHECK(glBlitFramebuffer(0, 0, aTexture->GetWidth(), aTexture->GetHeight(),
-#if PICOXR
+#if PICOXR || AOSP
                                    0, aTexture->GetHeight(), aTexture->GetWidth(), 0,
 #else
                                    0, 0, aTexture->GetWidth(), aTexture->GetHeight(),

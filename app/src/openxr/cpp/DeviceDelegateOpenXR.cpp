@@ -104,6 +104,7 @@ struct DeviceDelegateOpenXR::State {
   vrb::Matrix reorientMatrix = vrb::Matrix::Identity();
   device::CPULevel minCPULevel = device::CPULevel::Normal;
   device::DeviceType deviceType = device::UnknownType;
+  bool isAndroidXR = false;
   std::vector<const XrCompositionLayerBaseHeader*> frameEndLayers;
   std::function<void()> controllersCreatedCallback;
   std::function<bool()> controllersReadyCallback;
@@ -257,6 +258,7 @@ struct DeviceDelegateOpenXR::State {
     CHECK_XRCMD(xrGetInstanceProperties(instance, &instanceProperties));
     VRB_LOG("OpenXR Instance Created: RuntimeName=%s RuntimeVersion=%s", instanceProperties.runtimeName,
             GetXrVersionString(instanceProperties.runtimeVersion).c_str());
+    isAndroidXR = strcmp(instanceProperties.runtimeName, "Android XR") == 0;
 
     // Load Extensions
     OpenXRExtensions::LoadExtensions(instance);
@@ -782,7 +784,8 @@ struct DeviceDelegateOpenXR::State {
         suggestedRefreshRate = 72.0;
         break;
       default:
-        suggestedRefreshRate = 60.0;
+        // Android XR headsets (e.g. Samsung Galaxy XR) run at 90hz by default.
+        suggestedRefreshRate = isAndroidXR ? 90.0 : 60.0;
         break;
     }
 

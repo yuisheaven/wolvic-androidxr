@@ -59,7 +59,9 @@ public final class DebugLogcatSaver {
                 Log.e(LOGTAG, "Could not create " + name + " in Downloads");
                 return;
             }
-            process = new ProcessBuilder("logcat", "-v", "threadtime").redirectErrorStream(true).start();
+            // Skip the very chatty StrictMode and IME stack traces, they filled the log in minutes.
+            process = new ProcessBuilder("logcat", "-v", "threadtime", "StrictMode:S", "InputMethodManager:S", "*:D")
+                    .redirectErrorStream(true).start();
             try (InputStream in = process.getInputStream(); OutputStream out = resolver.openOutputStream(uri)) {
                 if (out == null)
                     return;
