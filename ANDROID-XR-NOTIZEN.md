@@ -22,6 +22,7 @@ Hand-Tracking, physische Tastatur.
 | `Ignore tracked hands while typing…` / `Ignore hands lowered over a physical keyboard` / `Keyboard zone…` | Tipp-Sperre (2,5 s), Tastaturzone (60 s nach letzter Taste: Hand > 40 cm unter dem Kopf und Strahl > 35° nach unten wird ignoriert), Strg+Alt+H schaltet Hand-Tracking um | eher persönlich, ggf. als Einstellung |
 | `[AOSP] Debug logcat saver: drop per-frame…` / `…never write form values or typed keys` | Log-Filter für Spam und sensible Zeilen | nein, nur zum Testen |
 | `[Gecko] Speak the upstream WebXR protocol with stock GeckoView` | WebXR mit der GeckoView von maven.mozilla.org (Protokoll v19 statt Wolvics v21) | eventuell, als Build-Option |
+| `[OpenXR] Do not use a cube layer on the Android XR emulator` | Der Emulator lehnt Cube-Swapchains ab und hängt danach beim nächsten Swapchain-Aufruf; im Emulator (`ro.boot.qemu=1`) wird daher kein Cube-Layer angelegt. Auf der Brille unverändert | ja |
 
 ## Bauen
 
@@ -49,6 +50,33 @@ Hinweise:
 - Maven Central bremst bei vielen Downloads (HTTP 429). Abhilfe: Gradle-Init-Skript, das
   `repo.maven.apache.org` auf `https://maven-central.storage-download.googleapis.com/maven2/`
   umleitet, oder einfach erneut starten.
+
+### Bauen unter Windows
+
+- Der Repo-Pfad darf **keine Leerzeichen** enthalten: Die C++-Include-Pfade werden ungequotet an
+  CMake übergeben. Abhilfe ohne Umbenennen: eine Verknüpfung (Junction) anlegen und darüber bauen,
+  z. B. `New-Item -ItemType Junction -Path C:\yuisapps\wolvic-build -Target "<Repo-Pfad>"`.
+- Signatur ohne den eigenen `~/.android/debug.keystore` zu ersetzen: den Wolvic-Schlüssel als
+  `debug.keystore` in einen eigenen Ordner legen und beim Bauen `ANDROID_USER_HOME` darauf setzen.
+- `sdkmanager.bat` trennt Argumente am `;` (z. B. `ndk;27.0.12077973`) – Pakete per
+  `--package_file=<datei>` übergeben.
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'   # JDK 21
+$env:ANDROID_USER_HOME = "$env:USERPROFILE\.android-wolvic"       # enthält debug.keystore
+cd C:\yuisapps\wolvic-build
+.\gradlew.bat assembleAospArm64GeckoGenericRelease   # Brille
+.\gradlew.bat assembleAospX64GeckoGenericRelease     # Emulator (x86_64)
+```
+
+## Android-XR-Emulator
+
+Emulator ab 37.x mit dem Image `system-images;android-34;android-xr-v3-playstore;x86_64`,
+Geräteprofil `xr_headset_device` (in `config.ini`: `hw.gpu.enabled=yes`, `hw.gpu.mode=host`,
+mehr RAM). Das Image bringt eine OpenXR-Laufzeit mit, Wolvic läuft dort als x86_64-Build
+(`aospX64GeckoGeneric`): Fenster, Menüleiste und Dialoge werden angezeigt, die Session erreicht
+`FOCUSED`. Einschränkungen: die Umgebung bleibt schwarz (kein Cube-Layer, siehe oben), Eingabe
+nur per Maus/Tastatur des Emulators, kein Ersatz für Tests auf der Brille.
 
 ## Bekannte Einschränkungen
 

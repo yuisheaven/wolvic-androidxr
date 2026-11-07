@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <sstream>
 #include <string.h>
+#include <sys/system_properties.h>
 
 #include "VRBrowser.h"
 
@@ -52,6 +53,11 @@ struct HandMeshPropertiesMSFT {
     uint32_t vertexCount = 0;
 };
 typedef std::unique_ptr<HandMeshPropertiesMSFT> HandMeshPropertiesMSFTPtr;
+
+static bool IsRunningOnEmulator() {
+  char value[PROP_VALUE_MAX] = {0};
+  return __system_property_get("ro.boot.qemu", value) > 0 && strcmp(value, "1") == 0;
+}
 
 struct DeviceDelegateOpenXR::State {
   vrb::RenderContextWeak context;
@@ -105,6 +111,7 @@ struct DeviceDelegateOpenXR::State {
   device::CPULevel minCPULevel = device::CPULevel::Normal;
   device::DeviceType deviceType = device::UnknownType;
   bool isAndroidXR = false;
+  bool cubeLayersSupported = true;
   std::vector<const XrCompositionLayerBaseHeader*> frameEndLayers;
   std::function<void()> controllersCreatedCallback;
   std::function<bool()> controllersReadyCallback;
@@ -263,6 +270,14 @@ struct DeviceDelegateOpenXR::State {
     VRB_LOG("OpenXR Instance Created: RuntimeName=%s RuntimeVersion=%s", instanceProperties.runtimeName,
             GetXrVersionString(instanceProperties.runtimeVersion).c_str());
     isAndroidXR = strcmp(instanceProperties.runtimeName, "Android XR") == 0;
+
+    // The Android XR emulator lists XR_KHR_composition_layer_cube, but its compositor rejects
+    // cube swapchains, and after the failed xrCreateSwapchain the next swapchain creation hangs.
+    // So do not create a cube layer for the environment there at all.
+    cubeLayersSupported = !(isAndroidXR && IsRunningOnEmulator());
+    if (!cubeLayersSupported) {
+      VRB_LOG("OpenXR cube layers are not usable on this runtime, not using one for the environment");
+    }
 
     // Load Extensions
     OpenXRExtensions::LoadExtensions(instance);
@@ -1506,7 +1521,7 @@ DeviceDelegateOpenXR::CreateLayerCylinder(const VRLayerSurfacePtr& aMoveLayer) {
 
 VRLayerCubePtr
 DeviceDelegateOpenXR::CreateLayerCube(int32_t aWidth, int32_t aHeight, GLint aInternalFormat) {
-  if (!m.layersEnabled) {
+  if (!m.layersEnabled || !m.cubeLayersSupported) {
     return nullptr;
   }
   if (m.cubeLayer) {
