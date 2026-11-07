@@ -21,6 +21,12 @@ def getGitHash = { ->
     }.standardOutput.asText.get().trim()
 }
 
+// The prebuilt GeckoView from maven.mozilla.org only speaks the upstream WebXR shared memory
+// protocol. A local GeckoView substitution is expected to carry the Wolvic Gecko patches.
+def usesStockGeckoView = { ->
+    return !gradle.hasProperty('localProperties.dependencySubstitutions.geckoviewTopsrcdir')
+}
+
 def shouldUseStaticVersionCode = { ->
     if (gradle.hasProperty("userProperties.useStaticVersionCode")) {
         return gradle."userProperties.useStaticVersionCode" == "true"
@@ -379,7 +385,7 @@ android {
             dimension = "backend"
             externalNativeBuild {
                 cmake {
-                    cppFlags " -DGECKO"
+                    cppFlags " -DGECKO" + (usesStockGeckoView() ? " -DWOLVIC_STOCK_GECKOVIEW" : "")
                     arguments "-DGECKO=ON"
                 }
             }
