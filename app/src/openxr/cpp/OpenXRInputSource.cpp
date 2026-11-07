@@ -22,9 +22,10 @@ const float kControllerClickThreshold = 0.25f;
 const float kPinchThreshold = 0.91f;
 
 // While a physical keyboard is in use, a tracked hand this far below the head whose aim ray points
-// down is most likely over the keyboard and not pointing at the UI.
-const float kKeyboardZoneMinDepthBelowHead = 0.35f; // meters
-const float kKeyboardZoneMinDownwardAim = 0.34f; // sin(20 degrees)
+// steeply down is most likely over the keyboard. Keep the thresholds conservative: pointing at the
+// lower UI (navigation bar, tray) from a hand in front of the chest must keep working.
+const float kKeyboardZoneMinDepthBelowHead = 0.40f; // meters
+const float kKeyboardZoneMinDownwardAim = 0.57f; // sin(35 degrees)
 
 OpenXRInputSourcePtr OpenXRInputSource::Create(XrInstance instance, XrSession session, OpenXRActionSet& actionSet, const XrSystemProperties& properties, OpenXRHandFlags handeness, int index)
 {
