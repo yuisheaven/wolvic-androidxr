@@ -1,6 +1,6 @@
 # Wolvic auf Android XR (Samsung Galaxy XR) – Notizen
 
-Dieser Branch (`ccr-5623a11b-xy1xci`) bringt Wolvic auf der Samsung Galaxy XR (SM-I610,
+Dieser Branch (`android-xr`, früher `ccr-5623a11b-xy1xci`) bringt Wolvic auf der Samsung Galaxy XR (SM-I610,
 Android XR, OpenXR-Laufzeit „Android XR“, Systemname „Moohan“) zum Laufen. Gebaut wird die
 AOSP-Variante mit Gecko: `aospArm64GeckoGeneric`.
 
