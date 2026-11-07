@@ -1,5 +1,7 @@
 #include "OpenXRLayers.h"
 #include "vrb/RenderContext.h"
+#include <algorithm>
+#include <cmath>
 
 namespace crow {
 
@@ -238,6 +240,95 @@ OpenXRLayerEquirect::Update(XrSpace aSpace, const XrPosef &aReorientPose, XrSwap
     if (mLayerImageLayout != XR_NULL_HANDLE)
       PushNextXrStructureInChain((XrBaseInStructure&)xrLayers[i], (XrBaseInStructure&)*mLayerImageLayout);
 #endif
+  }
+}
+
+// OpenXRLayerEquirect2;
+
+OpenXRLayerEquirect2Ptr
+OpenXRLayerEquirect2::Create(const VRLayerEquirectPtr& aLayer, const OpenXRLayerPtr& aSourceLayer) {
+  auto result = std::make_shared<OpenXRLayerEquirect2>();
+  result->layer = aLayer;
+  result->sourceLayer = aSourceLayer;
+  return result;
+}
+
+void
+OpenXRLayerEquirect2::Init(JNIEnv * aEnv, XrSession session, vrb::RenderContextPtr& aContext) {
+  OpenXRLayerPtr source = sourceLayer.lock();
+  if (!source) {
+    return;
+  }
+  swapchain = source->GetSwapChain();
+
+  for (auto& xrLayer: xrLayers)
+    xrLayer = { XR_TYPE_COMPOSITION_LAYER_EQUIRECT2_KHR };
+
+  OpenXRLayerBase<VRLayerEquirectPtr, XrCompositionLayerEquirect2KHR>::Init(aEnv, session, aContext);
+}
+
+void
+OpenXRLayerEquirect2::Destroy() {
+  swapchain = nullptr;
+  OpenXRLayerBase<VRLayerEquirectPtr, XrCompositionLayerEquirect2KHR>::Destroy();
+}
+
+bool
+OpenXRLayerEquirect2::IsDrawRequested() const {
+  OpenXRLayerPtr source = sourceLayer.lock();
+  return source && source->GetSwapChain() && source->IsComposited() && layer->IsDrawRequested();
+}
+
+void
+OpenXRLayerEquirect2::Update(XrSpace aSpace, const XrPosef &aReorientPose, XrSwapchain aClearSwapChain) {
+  OpenXRLayerPtr source = sourceLayer.lock();
+  if (source) {
+    swapchain = source->GetSwapChain();
+  }
+  OpenXRLayerBase<VRLayerEquirectPtr, XrCompositionLayerEquirect2KHR>::Update(aSpace, aReorientPose, aClearSwapChain);
+
+  // XR_KHR_composition_layer_equirect2 has no UV transform. The video projections are expressed
+  // with the transform of the first version (texCoord = sphereCoord * scale + bias), so convert
+  // it into the part of the texture that is shown and the angles of the sphere that it covers.
+  // sphereCoord.x goes from 0 to 1 around the full circle, centered on the forward direction, and
+  // sphereCoord.y from 0 to 1 from the bottom to the top pole.
+  auto visibleRange = [](float aScale, float aBias, float& aTexStart, float& aTexEnd, float& aSphereStart, float& aSphereEnd) {
+    if (aScale <= 0.0f) {
+      aTexStart = aSphereStart = 0.0f;
+      aTexEnd = aSphereEnd = 1.0f;
+      return;
+    }
+    aTexStart = std::clamp(aBias, 0.0f, 1.0f);
+    aTexEnd = std::clamp(aBias + aScale, 0.0f, 1.0f);
+    aSphereStart = (aTexStart - aBias) / aScale;
+    aSphereEnd = (aTexEnd - aBias) / aScale;
+  };
+
+  const uint numXRLayers = GetNumXRLayers();
+  for (int i = 0; i < numXRLayers; ++i) {
+    device::Eye eye = i == 0 ? device::Eye::Left : device::Eye::Right;
+    xrLayers[i].pose = aReorientPose;
+    xrLayers[i].eyeVisibility = GetEyeVisibility(i);
+
+    const vrb::Vector scale = layer->GetUVTransform(eye).GetScale();
+    const vrb::Vector bias = layer->GetUVTransform(eye).GetTranslation();
+    float texX0, texX1, sphereX0, sphereX1, texY0, texY1, sphereY0, sphereY1;
+    visibleRange(scale.x(), bias.x(), texX0, texX1, sphereX0, sphereX1);
+    visibleRange(scale.y(), bias.y(), texY0, texY1, sphereY0, sphereY1);
+
+    // Map surface and the visible part of the rect
+    device::EyeRect rect = layer->GetTextureRect(eye);
+    device::EyeRect visibleRect(rect.mX + texX0 * rect.mWidth, rect.mY + texY0 * rect.mHeight,
+                                (texX1 - texX0) * rect.mWidth, (texY1 - texY0) * rect.mHeight);
+    xrLayers[i].subImage.swapchain = swapchain->SwapChain();
+    xrLayers[i].subImage.imageArrayIndex = 0;
+    xrLayers[i].subImage.imageRect = GetRect(swapchain->Width(), swapchain->Height(), visibleRect);
+
+    // Zero radius value is treated as an infinite sphere
+    xrLayers[i].radius = 0;
+    xrLayers[i].centralHorizontalAngle = (sphereX1 - sphereX0) * 2.0f * (float) M_PI;
+    xrLayers[i].upperVerticalAngle = (sphereY1 - 0.5f) * (float) M_PI;
+    xrLayers[i].lowerVerticalAngle = (sphereY0 - 0.5f) * (float) M_PI;
   }
 }
 

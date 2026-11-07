@@ -80,7 +80,7 @@ struct DeviceDelegateOpenXR::State {
   std::vector<int64_t> swapchainFormats;
   OpenXRInputPtr input;
   OpenXRLayerCubePtr cubeLayer;
-  OpenXRLayerEquirectPtr equirectLayer;
+  OpenXRLayerPtr equirectLayer;
   std::vector<OpenXRLayerPtr> uiLayers;
   device::RenderMode renderMode = device::RenderMode::StandAlone;
   vrb::CameraEyePtr cameras[2];
@@ -186,10 +186,13 @@ struct DeviceDelegateOpenXR::State {
     if (OpenXRExtensions::IsExtensionSupported(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME)) {
         extensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
     }
-#if defined(OCULUSVR) || defined(PFDMXR)
+    if (OpenXRExtensions::IsExtensionSupported(XR_KHR_COMPOSITION_LAYER_EQUIRECT_EXTENSION_NAME)) {
+      extensions.push_back(XR_KHR_COMPOSITION_LAYER_EQUIRECT_EXTENSION_NAME);
+    }
     if (OpenXRExtensions::IsExtensionSupported(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME)) {
       extensions.push_back(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME);
     }
+#if defined(OCULUSVR) || defined(PFDMXR)
     if (OpenXRExtensions::IsExtensionSupported(XR_FB_COMPOSITION_LAYER_IMAGE_LAYOUT_EXTENSION_NAME)) {
       extensions.push_back(XR_FB_COMPOSITION_LAYER_IMAGE_LAYOUT_EXTENSION_NAME);
     }
@@ -1530,7 +1533,16 @@ DeviceDelegateOpenXR::CreateLayerEquirect(const VRLayerPtr &aSource) {
   if (m.equirectLayer) {
     m.equirectLayer->Destroy();
   }
+#if defined(OCULUSVR) || defined(PFDMXR)
   m.equirectLayer = OpenXRLayerEquirect::Create(result, source);
+#else
+  // Android XR only implements the second version of the equirect extension.
+  if (!OpenXRExtensions::IsExtensionSupported(XR_KHR_COMPOSITION_LAYER_EQUIRECT_EXTENSION_NAME) &&
+      OpenXRExtensions::IsExtensionSupported(XR_KHR_COMPOSITION_LAYER_EQUIRECT2_EXTENSION_NAME))
+    m.equirectLayer = OpenXRLayerEquirect2::Create(result, source);
+  else
+    m.equirectLayer = OpenXRLayerEquirect::Create(result, source);
+#endif
   if (m.session != XR_NULL_HANDLE) {
     vrb::RenderContextPtr context = m.context.lock();
     m.equirectLayer->Init(m.javaContext->env, m.session, context);
@@ -1568,7 +1580,7 @@ DeviceDelegateOpenXR::DeleteLayer(const VRLayerPtr& aLayer) {
     m.cubeLayer = nullptr;
     return;
   }
-  if (m.equirectLayer && m.equirectLayer->layer == aLayer) {
+  if (m.equirectLayer && m.equirectLayer->GetLayer() == aLayer) {
     m.equirectLayer->Destroy();
     m.equirectLayer = nullptr;
     return;

@@ -411,6 +411,24 @@ public:
   bool IsDrawRequested() const override;
 };
 
+// Same as OpenXRLayerEquirect but using XR_KHR_composition_layer_equirect2, for runtimes that do
+// not implement the first version of the extension (e.g. Android XR).
+class OpenXRLayerEquirect2;
+
+typedef std::shared_ptr<OpenXRLayerEquirect2> OpenXRLayerEquirect2Ptr;
+
+class OpenXRLayerEquirect2 : public OpenXRLayerBase<VRLayerEquirectPtr, XrCompositionLayerEquirect2KHR> {
+public:
+  std::weak_ptr<OpenXRLayer> sourceLayer;
+
+  static OpenXRLayerEquirect2Ptr
+  Create(const VRLayerEquirectPtr &aLayer, const OpenXRLayerPtr &aSourceLayer);
+  void Init(JNIEnv *aEnv, XrSession session, vrb::RenderContextPtr &aContext) override;
+  void Update(XrSpace aSpace, const XrPosef &aReorientPose, XrSwapchain aClearSwapChain) override;
+  void Destroy() override;
+  bool IsDrawRequested() const override;
+};
+
 
 class OpenXRLayerPassthrough;
 typedef std::shared_ptr<OpenXRLayerPassthrough> OpenXRLayerPassthroughPtr;
