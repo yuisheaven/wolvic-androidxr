@@ -16,8 +16,10 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import java.io.InputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -32,6 +34,14 @@ import java.util.Locale;
 public final class DebugLogcatSaver {
     private static final String LOGTAG = SystemUtils.createLogtag(DebugLogcatSaver.class);
     private static final long MAX_LOG_BYTES = 32L * 1024 * 1024;
+    // Per-frame messages from the Android XR runtime client that flood the log.
+    private static final String[] SPAM = {
+            "Buffer item consumer returned null buffer",
+            "Unimplemented layer type",
+            "Failed to latch buffer",
+            "Found no buffer for compositor",
+            "EglImage dataspace changed",
+    };
 
     private DebugLogcatSaver() {}
 
@@ -42,6 +52,14 @@ public final class DebugLogcatSaver {
         Thread thread = new Thread(() -> saveLogcat(appContext), "DebugLogcatSaver");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private static boolean isSpam(String line) {
+        for (String spam : SPAM) {
+            if (line.contains(spam))
+                return true;
+        }
+        return false;
     }
 
     private static void saveLogcat(@NonNull Context context) {
@@ -62,17 +80,24 @@ public final class DebugLogcatSaver {
             // Skip the very chatty StrictMode and IME stack traces, they filled the log in minutes.
             process = new ProcessBuilder("logcat", "-v", "threadtime", "StrictMode:S", "InputMethodManager:S", "*:D")
                     .redirectErrorStream(true).start();
-            try (InputStream in = process.getInputStream(); OutputStream out = resolver.openOutputStream(uri)) {
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+                 OutputStream out = resolver.openOutputStream(uri)) {
                 if (out == null)
                     return;
-                byte[] buffer = new byte[8192];
                 long written = 0;
-                int count;
-                while ((count = in.read(buffer)) > 0 && written < MAX_LOG_BYTES) {
-                    out.write(buffer, 0, count);
+                long skipped = 0;
+                String line;
+                while ((line = in.readLine()) != null && written < MAX_LOG_BYTES) {
+                    if (isSpam(line)) {
+                        // Keep a trace of the spam so that its timing is still visible.
+                        if (++skipped % 1000 != 1)
+                            continue;
+                        line = line + "   [DebugLogcatSaver: " + skipped + " spam lines so far]";
+                    }
+                    byte[] bytes = (line + "\n").getBytes(StandardCharsets.UTF_8);
                     // Write through right away: the process may die at any moment.
-                    out.flush();
-                    written += count;
+                    out.write(bytes);
+                    written += bytes.length;
                 }
             }
         } catch (Exception e) {
