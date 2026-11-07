@@ -240,7 +240,17 @@ struct DeviceDelegateOpenXR::State {
     strcpy(createInfo.applicationInfo.applicationName, "Wolvic");
     createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
 
-    CHECK_XRCMD(xrCreateInstance(&createInfo, &instance));
+    XrResult createInstanceResult = xrCreateInstance(&createInfo, &instance);
+#ifdef XR_API_VERSION_1_0
+    // Headers from a 1.1 loader request OpenXR 1.1. Fall back to 1.0 for runtimes that only support 1.0.
+    if (createInstanceResult == XR_ERROR_API_VERSION_UNSUPPORTED) {
+      VRB_WARN("OpenXR runtime does not support API version %s, falling back to 1.0",
+               GetXrVersionString(createInfo.applicationInfo.apiVersion).c_str());
+      createInfo.applicationInfo.apiVersion = XR_API_VERSION_1_0;
+      createInstanceResult = xrCreateInstance(&createInfo, &instance);
+    }
+#endif
+    CHECK_XRCMD(createInstanceResult);
     CHECK_MSG(instance != XR_NULL_HANDLE, "Failed to create XRInstance");
 
     XrInstanceProperties instanceProperties{XR_TYPE_INSTANCE_PROPERTIES};
