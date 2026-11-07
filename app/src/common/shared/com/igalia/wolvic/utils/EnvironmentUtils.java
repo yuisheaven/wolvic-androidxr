@@ -20,7 +20,8 @@ public class EnvironmentUtils {
 
     public static final String ENVS_FOLDER = "envs";
     public static final String BUILTIN_ENVS_PREFIX = "cubemap/";
-    public static String[] SUPPORTED_ENV_EXTENSIONS = (DeviceType.isOculusBuild() || DeviceType.isPfdmXR()) ?
+    // These runtimes do not support compressed (ETC2) textures for the environment cube layer.
+    public static String[] SUPPORTED_ENV_EXTENSIONS = (DeviceType.isOculusBuild() || DeviceType.isPfdmXR() || DeviceType.isAOSP()) ?
             new String[]{".jpg", ".png"} : new String[]{".ktx", ".jpg", ".png"};
 
     /**

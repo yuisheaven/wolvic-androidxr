@@ -616,6 +616,20 @@ struct DeviceDelegateOpenXR::State {
     }
   }
 
+  void InitCubeLayer() {
+    if (!cubeLayer || session == XR_NULL_HANDLE)
+      return;
+    // Not every runtime supports every format for cube layers (e.g. Android XR rejects the
+    // compressed ETC2 formats). Do not show the environment rather than aborting.
+    if (!SupportsColorFormat(cubeLayer->GetFormat())) {
+      VRB_ERROR("OpenXR runtime does not support swapchain format 0x%x for the environment cube layer",
+                cubeLayer->GetFormat());
+      return;
+    }
+    vrb::RenderContextPtr ctx = context.lock();
+    cubeLayer->Init(javaContext->env, session, ctx);
+  }
+
   void AddUILayer(const OpenXRLayerPtr& aLayer, VRLayerSurface::SurfaceType aSurfaceType) {
     if (session != XR_NULL_HANDLE) {
       vrb::RenderContextPtr ctx = context.lock();
@@ -1492,10 +1506,7 @@ DeviceDelegateOpenXR::CreateLayerCube(int32_t aWidth, int32_t aHeight, GLint aIn
   }
   VRLayerCubePtr layer = VRLayerCube::Create(aWidth, aHeight, aInternalFormat);
   m.cubeLayer = OpenXRLayerCube::Create(layer, aInternalFormat);
-  if (m.session != XR_NULL_HANDLE) {
-    vrb::RenderContextPtr context = m.context.lock();
-    m.cubeLayer->Init(m.javaContext->env, m.session, context);
-  }
+  m.InitCubeLayer();
   return layer;
 }
 
@@ -1708,9 +1719,7 @@ DeviceDelegateOpenXR::EnterVR(const crow::BrowserEGLContext& aEGLContext) {
   for (OpenXRLayerPtr& layer: m.uiLayers) {
     layer->Init(m.javaContext->env, m.session, context);
   }
-  if (m.cubeLayer) {
-    m.cubeLayer->Init(m.javaContext->env, m.session, context);
-  }
+  m.InitCubeLayer();
   if (m.equirectLayer) {
     m.equirectLayer->Init(m.javaContext->env, m.session, context);
   }

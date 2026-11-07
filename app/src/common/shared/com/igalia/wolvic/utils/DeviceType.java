@@ -138,6 +138,10 @@ public class DeviceType {
         return BuildConfig.FLAVOR_platform.toLowerCase().contains("pfdmxr");
     }
 
+    public static boolean isAOSP() {
+        return BuildConfig.FLAVOR_platform.toLowerCase().contains("aosp");
+    }
+
     public static String getDeviceTypeId() {
         String type = BuildConfig.FLAVOR_platform;
         if (DeviceType.isOculusBuild()) {

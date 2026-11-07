@@ -2101,14 +2101,14 @@ BrowserWorld::CreateSkyBox(const std::string& aBasePath, const std::string& aExt
     }
     return;
   }
-#if defined(OCULUSVR) || defined(PICOXR) || defined(PFDMXR)
+#if defined(OCULUSVR) || defined(PICOXR) || defined(PFDMXR) || defined(AOSP)
   bool usesSRGB = true;
 #else
   bool usesSRGB = false;
 #endif
 
-#if defined(OCULUSVR) || defined(PFDMXR)
-  // Meta Quest (after v69) does not support compressed textures for the cubemap.
+#if defined(OCULUSVR) || defined(PFDMXR) || defined(AOSP)
+  // Meta Quest (after v69) and Android XR do not support compressed textures for the cubemap.
   const std::string extension = aExtension.empty() ? ".png" : aExtension;
 #else
   const std::string extension = aExtension.empty() ? ".ktx" : aExtension;
