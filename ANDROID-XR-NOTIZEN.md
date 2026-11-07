@@ -58,6 +58,10 @@ Hinweise:
   z. B. `New-Item -ItemType Junction -Path C:\yuisapps\wolvic-build -Target "<Repo-Pfad>"`.
 - Signatur ohne den eigenen `~/.android/debug.keystore` zu ersetzen: den Wolvic-Schlüssel als
   `debug.keystore` in einen eigenen Ordner legen und beim Bauen `ANDROID_USER_HOME` darauf setzen.
+- **Zeilenenden:** Git für Windows wandelt beim Auschecken in CRLF um (`core.autocrlf=true`), dann
+  landen Assets (JS, JSON, HTML, `.obj`/`.mtl`-Modelle) mit CRLF in der APK. Vor dem Bauen im Repo
+  `git config core.autocrlf false` setzen (in KTX-Software zusätzlich `core.eol lf`) und die
+  Dateien neu auschecken.
 - `sdkmanager.bat` trennt Argumente am `;` (z. B. `ndk;27.0.12077973`) – Pakete per
   `--package_file=<datei>` übergeben.
 
