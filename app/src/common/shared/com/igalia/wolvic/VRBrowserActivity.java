@@ -32,6 +32,7 @@ import android.os.Process;
 import android.os.SystemClock;
 import android.util.Log;
 import android.util.Pair;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.Surface;
 import android.view.View;
@@ -1027,10 +1028,49 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (handlePhysicalKeyboardEvent(event)) {
+            return true;
+        }
         if (mKeyboard.dispatchKeyEvent(event)) {
             return true;
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    // Hands resting on or moving over a physical keyboard are tracked too and trigger accidental
+    // clicks. Ignore them while the user types, and let Ctrl+Alt+H toggle hand tracking.
+    private static final long HAND_TRACKING_TYPING_PAUSE_MS = 1200;
+    private boolean mHandTrackingPausedForTyping = false;
+    private final Runnable mResumeHandTrackingAfterTyping = () -> {
+        mHandTrackingPausedForTyping = false;
+        final boolean enabled = mIsHandTrackingEnabled;
+        queueRunnable(() -> setHandTrackingEnabledNative(enabled));
+    };
+
+    private boolean handlePhysicalKeyboardEvent(KeyEvent event) {
+        InputDevice device = event.getDevice();
+        if (device == null || device.isVirtual() ||
+                (event.getSource() & InputDevice.SOURCE_KEYBOARD) != InputDevice.SOURCE_KEYBOARD ||
+                device.getKeyboardType() != InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
+            return false;
+        }
+
+        if (event.getKeyCode() == KeyEvent.KEYCODE_H && event.isCtrlPressed() && event.isAltPressed()) {
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                setHandTrackingEnabled(!mIsHandTrackingEnabled);
+            }
+            return true;
+        }
+
+        if (mIsHandTrackingEnabled) {
+            if (!mHandTrackingPausedForTyping) {
+                mHandTrackingPausedForTyping = true;
+                queueRunnable(() -> setHandTrackingEnabledNative(false));
+            }
+            mHandler.removeCallbacks(mResumeHandTrackingAfterTyping);
+            mHandler.postDelayed(mResumeHandTrackingAfterTyping, HAND_TRACKING_TYPING_PAUSE_MS);
+        }
+        return false;
     }
 
     final Object mWaitLock = new Object();
@@ -2160,6 +2200,10 @@ public class VRBrowserActivity extends PlatformActivity implements WidgetManager
     @Override
     public void setHandTrackingEnabled(boolean value) {
         mIsHandTrackingEnabled = value;
+        if (mHandTrackingPausedForTyping && value) {
+            // The pause ends by itself and then applies the new value.
+            return;
+        }
         queueRunnable(() -> setHandTrackingEnabledNative(value));
     }
 
