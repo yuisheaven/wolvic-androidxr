@@ -54,6 +54,34 @@ public final class DebugLogcatSaver {
         thread.start();
     }
 
+    // Lines that can contain what the user typed or filled in (GeckoView's autofill debug output logs
+    // form values, including passwords). They are dropped entirely, the saved logs end up in places
+    // like cloud storage.
+    private static final String[] SENSITIVE_TAGS = {
+            "GeckoViewAutoFill",
+            "GeckoViewAutocomplete",
+            "AutofillSupport",
+            "LoginStorage",
+    };
+    private static final String[] SENSITIVE_TEXT = {
+            "Keyboard onPress",
+            "Updating value",
+            "password",
+    };
+
+    private static boolean isSensitive(String line) {
+        for (String tag : SENSITIVE_TAGS) {
+            if (line.contains(tag))
+                return true;
+        }
+        String lowerCase = line.toLowerCase(Locale.ROOT);
+        for (String text : SENSITIVE_TEXT) {
+            if (lowerCase.contains(text.toLowerCase(Locale.ROOT)))
+                return true;
+        }
+        return false;
+    }
+
     private static boolean isSpam(String line) {
         for (String spam : SPAM) {
             if (line.contains(spam))
@@ -78,7 +106,8 @@ public final class DebugLogcatSaver {
                 return;
             }
             // Skip the very chatty StrictMode and IME stack traces, they filled the log in minutes.
-            process = new ProcessBuilder("logcat", "-v", "threadtime", "StrictMode:S", "InputMethodManager:S", "*:D")
+            process = new ProcessBuilder("logcat", "-v", "threadtime", "StrictMode:S", "InputMethodManager:S",
+                    "GeckoViewAutoFill:S", "GeckoViewAutoFill[C]:S", "*:D")
                     .redirectErrorStream(true).start();
             try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
                  OutputStream out = resolver.openOutputStream(uri)) {
@@ -88,6 +117,8 @@ public final class DebugLogcatSaver {
                 long skipped = 0;
                 String line;
                 while ((line = in.readLine()) != null && written < MAX_LOG_BYTES) {
+                    if (isSensitive(line))
+                        continue;
                     if (isSpam(line)) {
                         // Keep a trace of the spam so that its timing is still visible.
                         if (++skipped % 1000 != 1)
